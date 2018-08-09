@@ -1,7 +1,9 @@
 # UnSHc
 UnSHc - How to decrypt SHc *.sh.x encrypted file ?
 
-ARM VERSION (First Beta Release)
+ARM VERSION (First Beta Release) 
+
+It has only been tested on raspberry PI 3 with raspbian. It probably won't work on ARM binaries that you try to decrypt on other platforms.
 
 # Please note
 
