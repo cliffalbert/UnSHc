@@ -148,7 +148,7 @@ function generate_dump() {
 # Update 28/07/2016 : Adding multiple ARC4 offsets support (loop on each candidate)
 function extract_arc4_call_addr(){
 	TAILNUMBER=$1
-	CALLADDRS=$($GREP -Eo "call.*[0-9a-f]{6,}" $DUMPFILE | $GREP -Eo "[0-9a-f]{6,}" | $SORT | $UNIQ -c | $SORT | $GREP -Eo "(14).*[0-9a-f]{6,}" | $GREP -Eo "[0-9a-f]{6,}")
+	CALLADDRS=$($GREP -Eo "bl.*[0-9a-f]{5,}" $DUMPFILE | $GREP -Eo "[0-9a-f]{5,}" | $SORT | $UNIQ -c | $SORT | $GREP -Eo "(14).*[0-9a-f]{5,}" | $GREP -Eo "[0-9a-f]{5,}")
 	TAILMAX=`wc -l <<< "$CALLADDRS"`
         CALLADDR=$(echo $CALLADDRS | $SED "s/ /\n/g" | $TAIL -n $TAILNUMBER | $HEAD -n 1)
         if [[ -z "$CALLADDR" || $TAILNUMBER -gt $TAILMAX ]]; then
@@ -165,23 +165,28 @@ function extract_variables_from_binary(){
         i=2
         # Retrieve ordered list of address var and put it to $CALLADDRFILE
         while [[ $($WC -l < $CALLADDRFILE) -ne 14 ]]; do
-                $GREP -B $i "call.*$CALLADDR" $DUMPFILE | $GREP -v "$CALLADDR" | $GREP -Eo "(0x[0-9a-f]{6,})" > $CALLADDRFILE
+                $GREP -B $i "bl.*$CALLADDR" $DUMPFILE | $GREP -v "$CALLADDR" | grep ldr | grep -Eo "; ([0-9a-f]{5,})" | sed -e 's/; //' > $CALLADDRFILE
                 i=$(($i + 1))
+		echo "I: $i"
                 if [ $i -eq 10 ]; then
                         echo "[-] Unable to extract addresses of 14 arc4 args with ARC4 address call [0x$CALLADDR]..."
-                        return;
+                #        return;
                 fi
         done
 
+	cp $CALLADDRFILE calladdress.file
+
+	(for i in `cat calladdress.file`; do grep "$i:" $DUMPFILE | awk '{print $2}' | sed -e s/^0*//; done) > $CALLADDRFILE
+
         # Initialize the number of line before CALLADDR to looking for sizes of args
-        i=3
+        i=2
         # Retrieve ordered list of size var and append it to $CALLSIZEFILE
         while [[ $($WC -l < $CALLSIZEFILE) -ne 14 ]]; do
-                $GREP -B $i "call.*$CALLADDR" $DUMPFILE | $GREP -v "$CALLADDR" | $GREP -Eo "(0x[0-9a-f]+,)" | $GREP -Eo "(0x[0-9a-f]+)" | $GREP -Ev "0x[0-9a-f]{6,}" > $CALLSIZEFILE
+                $GREP -B $i "bl.*$CALLADDR" $DUMPFILE | $GREP -v "$CALLADDR" | grep mov | egrep -Eo "(#[0-9]+)" | sed -e 's/#//' > $CALLSIZEFILE
                 i=$(($i + 1))
                 if [ $i -eq 10 ]; then
                         echo "[-] Unable to extract sizes of 14 arc4 args with ARC4 address call [0x$CALLADDR]..."
-                        return;
+                #        return;
                 fi
         done
 
@@ -227,6 +232,8 @@ function extract_variables_from_binary(){
         # Key is the address with the variable content.
         KEY=$(echo $i | $CUT -d 'x' -f 2)
 
+	echo "K: $KEY"
+
         # A 2 bytes variable (NBYTES > 0) can be found like this: (in STRINGFILE)
         # ---------------X
         # X---------------
@@ -234,16 +241,35 @@ function extract_variables_from_binary(){
         # So we need 2 lines from STRINGFILE to make it all correct. So:
         NLINES=$(( ($NBYTES / 16) +2 ))
 
+	echo "NL: $NLINES"
+
         # All line in STRINGFILE starts from 0 to f. So LASTBIT tells me the index in the line to start recording.
-        let LASTBYTE="0x${KEY:$((${#KEY}-1))}"
+	TEMPVAL=${KEY:$((${#KEY}-1))}
+ 	TEMPFIX=$(echo $TEMPVAL | tr '[cdef0123456789ab]' '[0123456789abcdef]') 
+        let LASTBYTE="0x$TEMPFIX"
+
+	echo "LASTCALC: 0x${KEY:$((${#KEY}-1))}"
+	echo "LASTBYTE: $LASTBYTE"
+
+	BEFORE=1
+        if [ $LASTBYTE -le 3 ]; then
+         BEFORE=0;
+        fi
+
 
         # Grep all lines needed from STRINGFILE, merge lines.
-        STRING=$( $GREP -A $(($NLINES-1)) -E "^ ${KEY:0:$((${#KEY}-1))}0 " $STRINGFILE | $AWK '{ print $2$3$4$5}' | $TR '\n' 'T' | $SED -e "s:T::g")
+ 	echo "KEY: ${KEY:0:$((${#KEY}-1))}c "
+        STRING=$( $GREP -B $BEFORE -A $(($NLINES-1)) -E "^ ${KEY:0:$((${#KEY}-1))}c" $STRINGFILE | $AWK '{ print $2$3$4$5}' | $TR '\n' 'T' | $SED -e "s:T::g")
+	
+	echo "STR: $STRING"
 
         # Change string to begin in the line index.
         STRING=${STRING:$((2*$LASTBYTE))}
+
+	echo "STR trim $STRING"
         # Cut the string to the number off bytes of the variable.
         STRING=${STRING:0:$(($NBYTES * 2))}
+	echo "STR cut $STRING"
 
         # We need to convert to a \x??\x?? structure so:
         FINALSTRING=""
@@ -301,16 +327,16 @@ function define_variable() {
 function extract_password_from_binary(){
         echo "[*] Extracting password..."
         KEY_ADDR=""
-        KEY_SIZE=""
+        KEY_SIZE="256"
 
         # Initialize the number of line before CALLADDR to watch
         i=5
         while [[ ( -z "$KEY_ADDR" ) || ( -z "$KEY_SIZE" ) ]]; do
-                $GREP -B $i -m 1 "call.*$CALLADDR" $DUMPFILE | $GREP -v $CALLADDR > $CALLFILE
-                #cat $CALLFILE
-                # Adjust these two next line to grep right addr & size value (depending on your architecture)
-                KEY_ADDR=$($GREP -B 3 -m 1 "call" $CALLFILE | $GREP mov | $GREP -oE "0x[0-9a-z]{6,}+" | $HEAD -n 1)
-                KEY_SIZE=$($GREP -B 3 -m 1 "call" $CALLFILE | $GREP mov | $GREP -v $KEY_ADDR | $GREP -v movb | $GREP -oE "0x[0-9a-z]+" | $HEAD -n 1)
+		PULLER=$(egrep -B6 "bl.*$CALLADDR" $DUMPFILE | head -3 | grep ldr | grep -Eo ';\ ([0-9a-f]{5,})' | sed -e 's/; //')
+		TOSSER=$(grep "$PULLER\:" $DUMPFILE | awk '{print $2}' | sed -e 's/^0*//')
+		echo "TOSSER: $TOSSER"
+		KEY_ADDR=$TOSSER
+                KEY_SIZE=256
                 i=$(($i + 1))
                 if [ $i -eq 10 ]; then
                         echo "[-] Error, function call previous first call of arc4() hasn't been identified..."
@@ -322,12 +348,28 @@ function extract_password_from_binary(){
 
         # Defining the address without 0x.
         KEY=$(echo $KEY_ADDR | $CUT -d 'x' -f 2)
+
+        echo "K: $KEY"
+
         # Like the other NLINES
         NLINES=$(( ($KEY_SIZE / 16) +2 ))
+	echo "NL: $NLINES"
         # Like the other LASTBYTE
-        LASTBYTE="0x${KEY:$((${#KEY}-1))}"
+        TEMPVAL=${KEY:$((${#KEY}-1))}
+        TEMPFIX=$(echo $TEMPVAL | tr '[cdef0123456789ab]' '[0123456789abcdef]')
+        let LASTBYTE="0x$TEMPFIX"
+        echo "LASTCALC: 0x${KEY:$((${#KEY}-1))}"
+        echo "LASTBYTE: $LASTBYTE"
+
+	BEFORE=1
+	if [ $LASTBYTE -le 3 ]; then
+	 BEFORE=0;
+	fi
+
+	echo "KEYTB: ${KEY:0:$((${#KEY}-1))}c"
+
         # Extract PWD from STRINGFILE
-        STRING=$( $GREP -A $(($NLINES-1)) -E "^ ${KEY:0:$((${#KEY}-1))}0 " $STRINGFILE | $AWK '{ print $2$3$4$5}' | $TR '\n' 'T' | $SED -e "s:T::g")
+        STRING=$( $GREP -B $BEFORE -A $(($NLINES-1)) -E "^ ${KEY:0:$((${#KEY}-1))}c" $STRINGFILE | $AWK '{ print $2$3$4$5}' | $TR '\n' 'T' | $SED -e "s:T::g")
         STRING=${STRING:$((2*$LASTBYTE))}
         STRING=${STRING:0:$(($KEY_SIZE * 2))}
         # Encode / rewrite PWD in the \x??\x?? format
@@ -335,6 +377,7 @@ function extract_password_from_binary(){
         for ((i=0;i<$((${#STRING} /2 ));i++)); do
                 FINALSTRING="${FINALSTRING}\x${STRING:$(($i * 2)):2}"
         done
+	echo "PWD: $FINALSTRING"
         VAR_PSWD=$FINALSTRING
 }
 
@@ -707,6 +750,9 @@ generic_file
 $GCC -o $TMPBINARY ${TMPBINARY}.c >/dev/null 2>&1
 
 echo "[*] Executing [$TMPBINARY] to decrypt [${BINARY}]"
+
+cp ${TMPBINARY}.c output.c
+cp $TMPBINARY output
 
 if [ -z "$OUTPUTFILE" ]; then
         echo "[*] Retrieving initial source code in [${BINARY%.sh.x}.sh]"
