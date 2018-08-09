@@ -5,7 +5,7 @@ ARM VERSION (First Beta Release)
 
 It has only been tested on raspberry PI 3 with raspbian. It probably won't work on ARM binaries that you try to decrypt on other platforms.
 
-# Please note
+# FROM HERE ARE THE ORIGINAL unSHC Readme.MD
 
 I will not decrypt any file for people.
 Issues on GitHub are only to discuss about bug and/or improvement of the tool "UnSHc".
