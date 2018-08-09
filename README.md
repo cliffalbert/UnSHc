@@ -1,6 +1,8 @@
 # UnSHc
 UnSHc - How to decrypt SHc *.sh.x encrypted file ?
 
+ARM VERSION (First Beta Release)
+
 # Please note
 
 I will not decrypt any file for people.
