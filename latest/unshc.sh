@@ -27,21 +27,13 @@
 # Updated: Yann CAM v0.8 - yann.cam@gmail.com | www.asafety.fr
 #  01/23/17 - v0.8
 #  -- Adjust grep for retrieve PWD_SIZE in OBJDUMP to ignore movb instruction (https://github.com/yanncam/UnSHc/issues/12)
+# Updated: Cliff Albert v0.8arm - cliff.albert@gmail.com
+#  08/09/18 - v0.8arm
+#  -- Initial ARM port
 ###################
 # Tested on :
-#  Ubuntu 14.04.3 LTS x86_64
-#    Linux server 3.13.0-61-generic #100-Ubuntu SMP Wed Jul 29 11:21:34 UTC 2015 x86_64 x86_64 x86_64 GNU/Linux
-#    Linux version 3.13.0-61-generic (buildd@lgw01-50) (gcc version 4.8.2 (Ubuntu 4.8.2-19ubuntu1) ) #100-Ubuntu SMP Wed Jul 29 11:21:34 UTC 2015
-#
-#  CentOS release 6.6 (Final) x86_64
-#    Linux server 2.6.32-504.23.4.el6.x86_64 #1 SMP Tue Jun 9 20:57:37 UTC 2015 x86_64 x86_64 x86_64 GNU/Linux
-#    Linux version 2.6.32-504.23.4.el6.x86_64 (mockbuild@c6b9.bsys.dev.centos.org) (gcc version 4.4.7 20120313 (Red Hat 4.4.7-11) (GCC) ) #1 SMP Tue Jun 9 20:57:37 UTC 2015
-#
-#  Debian 7.8 i686
-#    Linux server 3.2.0-4-686-pae #1 SMP Debian 3.2.68-1+deb7u2 i686 GNU/Linux
-#    Linux version 3.2.0-4-686-pae (debian-kernel@lists.debian.org) (gcc version 4.6.3 (Debian 4.6.3-14) ) #1 SMP Debian 3.2.68-1+deb7u2
 ###################
-VERSION="0.8"
+VERSION="0.8arm"
 
 OBJDUMP=`which objdump`
 GREP=`which grep`
@@ -63,6 +55,7 @@ DUMPFILE=""
 STRINGFILE=""
 CALLFILE=$(mktemp /tmp/XXXXXX)
 CALLADDRFILE=$(mktemp /tmp/XXXXXX)
+CALLADDRTEMP=$(mktemp /tmp/XXXXXX)
 CALLSIZEFILE=$(mktemp /tmp/XXXXXX)
 
 declare -A LISTOFCALL
@@ -89,7 +82,7 @@ function usage(){
 
 # Clean all temp file created for this script
 function clean(){
-        $SHRED -zu -n 1 $DUMPFILE $CALLFILE $CALLADDRFILE $CALLSIZEFILE $STRINGFILE $TMPBINARY ${TMPBINARY}.c >/dev/null 2>&1
+        $SHRED -zu -n 1 $DUMPFILE $CALLADDRTEMP $CALLFILE $CALLADDRFILE $CALLSIZEFILE $STRINGFILE $TMPBINARY ${TMPBINARY}.c >/dev/null 2>&1
 }
 
 # Clean error exit function after cleaning temp file
@@ -174,9 +167,9 @@ function extract_variables_from_binary(){
                 fi
         done
 
-	cp $CALLADDRFILE calladdress.file
+	cp $CALLADDRFILE $CALLADDRTEMP
 
-	(for i in `cat calladdress.file`; do grep "$i:" $DUMPFILE | awk '{print $2}' | sed -e s/^0*//; done) > $CALLADDRFILE
+	(for i in `cat $CALLADDRTEMP`; do grep "$i:" $DUMPFILE | awk '{print $2}' | sed -e s/^0*//; done) > $CALLADDRFILE
 
         # Initialize the number of line before CALLADDR to looking for sizes of args
         i=2
@@ -750,9 +743,6 @@ generic_file
 $GCC -o $TMPBINARY ${TMPBINARY}.c >/dev/null 2>&1
 
 echo "[*] Executing [$TMPBINARY] to decrypt [${BINARY}]"
-
-cp ${TMPBINARY}.c output.c
-cp $TMPBINARY output
 
 if [ -z "$OUTPUTFILE" ]; then
         echo "[*] Retrieving initial source code in [${BINARY%.sh.x}.sh]"
