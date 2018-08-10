@@ -163,10 +163,12 @@ function extract_variables_from_binary(){
 		echo "I: $i"
                 if [ $i -eq 10 ]; then
                         echo "[-] Unable to extract addresses of 14 arc4 args with ARC4 address call [0x$CALLADDR]..."
-                #        return;
+                        return;
                 fi
         done
 
+
+	# On arm there are pointers to data segments, so we need to take care of that.
 	cp $CALLADDRFILE $CALLADDRTEMP
 
 	(for i in `cat $CALLADDRTEMP`; do grep "$i:" $DUMPFILE | awk '{print $2}' | sed -e s/^0*//; done) > $CALLADDRFILE
@@ -179,7 +181,7 @@ function extract_variables_from_binary(){
                 i=$(($i + 1))
                 if [ $i -eq 10 ]; then
                         echo "[-] Unable to extract sizes of 14 arc4 args with ARC4 address call [0x$CALLADDR]..."
-                #        return;
+                        return;
                 fi
         done
 
@@ -237,6 +239,7 @@ function extract_variables_from_binary(){
 	#echo "NL: $NLINES"
 
         # All line in STRINGFILE starts from 0 to f. So LASTBIT tells me the index in the line to start recording.
+	# On arm dumped strings from objdump start at 0xc instead of 0x0. So we need to offset that.
 	TEMPVAL=${KEY:$((${#KEY}-1))}
  	TEMPFIX=$(echo $TEMPVAL | tr '[cdef0123456789ab]' '[0123456789abcdef]') 
         let LASTBYTE="0x$TEMPFIX"
@@ -317,6 +320,7 @@ function define_variable() {
 # Update 27/06/2013 : Add new objdump format
 # Update 18/11/2015 : Simplify extraction
 # Update 23/01/2017 : Ignore movb instruction
+# TODO: Need to implement KEY_SIZE detection. For now it is fixed at 256 as it is the usual default for SHC
 function extract_password_from_binary(){
         echo "[*] Extracting password..."
         KEY_ADDR=""
