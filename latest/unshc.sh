@@ -225,7 +225,7 @@ function extract_variables_from_binary(){
         # Key is the address with the variable content.
         KEY=$(echo $i | $CUT -d 'x' -f 2)
 
-	echo "K: $KEY"
+	#echo "K: $KEY"
 
         # A 2 bytes variable (NBYTES > 0) can be found like this: (in STRINGFILE)
         # ---------------X
@@ -234,15 +234,15 @@ function extract_variables_from_binary(){
         # So we need 2 lines from STRINGFILE to make it all correct. So:
         NLINES=$(( ($NBYTES / 16) +2 ))
 
-	echo "NL: $NLINES"
+	#echo "NL: $NLINES"
 
         # All line in STRINGFILE starts from 0 to f. So LASTBIT tells me the index in the line to start recording.
 	TEMPVAL=${KEY:$((${#KEY}-1))}
  	TEMPFIX=$(echo $TEMPVAL | tr '[cdef0123456789ab]' '[0123456789abcdef]') 
         let LASTBYTE="0x$TEMPFIX"
 
-	echo "LASTCALC: 0x${KEY:$((${#KEY}-1))}"
-	echo "LASTBYTE: $LASTBYTE"
+	#echo "LASTCALC: 0x${KEY:$((${#KEY}-1))}"
+	#echo "LASTBYTE: $LASTBYTE"
 
 	BEFORE=1
         if [ $LASTBYTE -le 3 ]; then
@@ -251,18 +251,18 @@ function extract_variables_from_binary(){
 
 
         # Grep all lines needed from STRINGFILE, merge lines.
- 	echo "KEY: ${KEY:0:$((${#KEY}-1))}c "
+ 	#echo "KEY: ${KEY:0:$((${#KEY}-1))}c "
         STRING=$( $GREP -B $BEFORE -A $(($NLINES-1)) -E "^ ${KEY:0:$((${#KEY}-1))}c" $STRINGFILE | $AWK '{ print $2$3$4$5}' | $TR '\n' 'T' | $SED -e "s:T::g")
 	
-	echo "STR: $STRING"
+	#echo "STR: $STRING"
 
         # Change string to begin in the line index.
         STRING=${STRING:$((2*$LASTBYTE))}
 
-	echo "STR trim $STRING"
+	#echo "STR trim $STRING"
         # Cut the string to the number off bytes of the variable.
         STRING=${STRING:0:$(($NBYTES * 2))}
-	echo "STR cut $STRING"
+	#echo "STR cut $STRING"
 
         # We need to convert to a \x??\x?? structure so:
         FINALSTRING=""
@@ -327,7 +327,7 @@ function extract_password_from_binary(){
         while [[ ( -z "$KEY_ADDR" ) || ( -z "$KEY_SIZE" ) ]]; do
 		PULLER=$(egrep -B6 "bl.*$CALLADDR" $DUMPFILE | head -3 | grep ldr | grep -Eo ';\ ([0-9a-f]{5,})' | sed -e 's/; //')
 		TOSSER=$(grep "$PULLER\:" $DUMPFILE | awk '{print $2}' | sed -e 's/^0*//')
-		echo "TOSSER: $TOSSER"
+		#echo "TOSSER: $TOSSER"
 		KEY_ADDR=$TOSSER
                 KEY_SIZE=256
                 i=$(($i + 1))
@@ -342,24 +342,24 @@ function extract_password_from_binary(){
         # Defining the address without 0x.
         KEY=$(echo $KEY_ADDR | $CUT -d 'x' -f 2)
 
-        echo "K: $KEY"
+        #echo "K: $KEY"
 
         # Like the other NLINES
         NLINES=$(( ($KEY_SIZE / 16) +2 ))
-	echo "NL: $NLINES"
+	#echo "NL: $NLINES"
         # Like the other LASTBYTE
         TEMPVAL=${KEY:$((${#KEY}-1))}
         TEMPFIX=$(echo $TEMPVAL | tr '[cdef0123456789ab]' '[0123456789abcdef]')
         let LASTBYTE="0x$TEMPFIX"
-        echo "LASTCALC: 0x${KEY:$((${#KEY}-1))}"
-        echo "LASTBYTE: $LASTBYTE"
+        #echo "LASTCALC: 0x${KEY:$((${#KEY}-1))}"
+        #echo "LASTBYTE: $LASTBYTE"
 
 	BEFORE=1
 	if [ $LASTBYTE -le 3 ]; then
 	 BEFORE=0;
 	fi
 
-	echo "KEYTB: ${KEY:0:$((${#KEY}-1))}c"
+	#echo "KEYTB: ${KEY:0:$((${#KEY}-1))}c"
 
         # Extract PWD from STRINGFILE
         STRING=$( $GREP -B $BEFORE -A $(($NLINES-1)) -E "^ ${KEY:0:$((${#KEY}-1))}c" $STRINGFILE | $AWK '{ print $2$3$4$5}' | $TR '\n' 'T' | $SED -e "s:T::g")
